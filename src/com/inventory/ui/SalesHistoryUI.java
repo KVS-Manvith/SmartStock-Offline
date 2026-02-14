@@ -29,7 +29,7 @@ public class SalesHistoryUI {
 
         // Table
         TableView<Sale> table = new TableView<>();
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
         TableColumn<Sale, Integer> idCol = new TableColumn<>("Sale ID");
         idCol.setCellValueFactory(new PropertyValueFactory<>("saleId"));
@@ -71,7 +71,11 @@ public class SalesHistoryUI {
             }
         });
 
-        table.getColumns().addAll(idCol, productCol, qtyCol, priceCol, dateCol);
+        table.getColumns().add(idCol);
+        table.getColumns().add(productCol);
+        table.getColumns().add(qtyCol);
+        table.getColumns().add(priceCol);
+        table.getColumns().add(dateCol);
 
         // Load data
         SaleService saleService = new SaleService();

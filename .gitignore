@@ -1,5 +1,7 @@
 # Build output
 out/
+*.class
+.sources.list
 
 # OS files
 .DS_Store

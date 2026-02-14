@@ -61,7 +61,7 @@ public class ProductUI {
 
         // Table
         TableView<Product> table = new TableView<>();
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
         TableColumn<Product, Integer> idCol = new TableColumn<>("ID");
         idCol.setCellValueFactory(new PropertyValueFactory<>("productId"));
@@ -101,7 +101,12 @@ public class ProductUI {
             }
         });
 
-        table.getColumns().addAll(idCol, nameCol, categoryCol, qtyCol, priceCol, expiryCol);
+        table.getColumns().add(idCol);
+        table.getColumns().add(nameCol);
+        table.getColumns().add(categoryCol);
+        table.getColumns().add(qtyCol);
+        table.getColumns().add(priceCol);
+        table.getColumns().add(expiryCol);
 
         // Load data
         ProductDAO dao = new ProductDAO();
