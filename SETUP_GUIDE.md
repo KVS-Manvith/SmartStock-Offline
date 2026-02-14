@@ -1,170 +1,88 @@
-# Quick Setup Guide
+# SmartStock Offline - Setup Guide
 
-## Step 1: Install Prerequisites
+## 1. Install Required Software
 
-### 1.1 Install Java JDK 17+
-1. Download from: https://www.oracle.com/java/technologies/downloads/
-2. Run the installer
-3. Verify: Open Command Prompt and type: `java -version`
-
-### 1.2 Install JavaFX SDK
-1. Download from: https://gluonhq.com/products/javafx/
-2. Extract to: `C:\javafx\`
-3. Your structure should be: `C:\javafx\lib\` (containing .jar files)
-
-### 1.3 Install MySQL
-1. Download from: https://dev.mysql.com/downloads/mysql/
-2. Run installer and select "Developer Default"
-3. During setup, set root password (remember this!)
-4. Start MySQL service
-
-## Step 2: Setup Database
-
-### Option A: Using MySQL Command Line
-```bash
-# Open MySQL Command Line Client
-# Enter your root password
-
-# Run the setup script
-source C:\MANVITH\trail\SmartOfflineInventorySystem\database_setup.sql;
+### 1.1 Java (JDK 17+)
+- Install JDK 17 or newer.
+- Verify:
+```bat
+java -version
+javac -version
 ```
 
-### Option B: Using MySQL Workbench
-1. Open MySQL Workbench
-2. Connect to local instance
-3. Go to File → Open SQL Script
-4. Select `database_setup.sql` from project folder
-5. Click Execute (lightning bolt icon)
+### 1.2 JavaFX SDK
+- Download JavaFX SDK.
+- Keep JavaFX `lib` folder path ready.
+- Preferred location: `C:\javafx\lib`
 
-## Step 3: Verify Database Setup
+### 1.3 MySQL Server (8+)
+- Install MySQL Server.
+- Start MySQL service.
 
+## 2. Setup Database
+
+### Option A: MySQL Command Line
 ```sql
-USE inventory_db;
-SHOW TABLES;
-SELECT * FROM users;
-SELECT * FROM products;
+source C:/MANVITH/trail/SmartOfflineInventorySystem/database_setup.sql;
 ```
 
-You should see:
-- 4 tables created (users, products, sales, stock_history)
-- 2 users (admin, staff)
-- 10 sample products
+### Option B: MySQL Workbench
+1. Open Workbench.
+2. Open `database_setup.sql`.
+3. Execute the script.
 
-## Step 4: Configure Project (If Needed)
-
-Only if you changed MySQL settings:
-
-Edit `src\com\inventory\util\DBConnection.java`:
-```java
-private static final String URL = "jdbc:mysql://localhost:3306/inventory_db";
-private static final String USER = "inventory_user";     // Change if needed
-private static final String PASSWORD = "inventory123";    // Change if needed
-```
-
-Or set environment variables:
+## 3. Configure Database Connection (Optional)
+App supports environment variables:
 - `INVENTORY_DB_URL`
 - `INVENTORY_DB_USER`
 - `INVENTORY_DB_PASSWORD`
 
-## Step 5: Run the Application
+If not set, defaults in `src/com/inventory/util/DBConnection.java` are used.
 
-### Using VS Code (Recommended):
-
-1. Open project folder in VS Code
-2. Press **Ctrl+Shift+P**
-3. Type and select: "Tasks: Run Build Task"
-4. Wait for compilation to complete
-5. Press **Ctrl+Shift+P** again
-6. Type and select: "Tasks: Run Task"
-7. Select: "Run JavaFX App"
-
-### Using Command Line:
-
-```bash
-# Navigate to project directory
-cd C:\MANVITH\trail\SmartOfflineInventorySystem
-
-# Compile
-javac --module-path C:/javafx/lib --add-modules javafx.controls,javafx.fxml -cp lib/mysql-connector-j-9.6.0.jar -d out src/com/inventory/*/*.java
-
-# Run
-java --module-path C:/javafx/lib --add-modules javafx.controls,javafx.fxml -cp "out;lib/mysql-connector-j-9.6.0.jar" com.inventory.ui.FXLoginApp
+Example (PowerShell):
+```powershell
+$env:INVENTORY_DB_URL="jdbc:mysql://localhost:3306/inventory_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+$env:INVENTORY_DB_USER="inventory_user"
+$env:INVENTORY_DB_PASSWORD="inventory123"
 ```
 
-## Step 6: Login
+## 4. Run the Application
 
-Use these credentials:
-- **Admin Access:**
-  - Username: `admin`
-  - Password: `admin123`
+### Recommended: `run.bat`
+From project root:
+```bat
+run.bat
+```
 
-- **Staff Access:**
-  - Username: `staff`
-  - Password: `staff123`
+If JavaFX is not at `C:\javafx\lib`:
+```bat
+set JAVAFX_LIB=D:\javafx-sdk-21\lib
+run.bat
+```
 
-## Common Issues & Solutions
+## 5. Login Credentials
+- Admin: `admin` / `admin123`
+- Staff: `staff` / `staff123`
 
-### Issue 1: "javafx.* package does not exist"
-**Solution:** 
-- Verify JavaFX is installed at `C:\javafx\lib\`
-- Update path in tasks if installed elsewhere
+## 6. Verify Main Flows
+1. Login screen opens centered and maximized.
+2. Dashboard opens in single window with tabs.
+3. Product search/add/update/delete works (Admin).
+4. Billing updates stock and sales history.
+5. Reports and alerts load correctly.
+6. Logout returns to login page.
 
-### Issue 2: "Cannot connect to MySQL"
-**Solution:**
-- Ensure MySQL service is running:
-  - Windows: Services → MySQL → Start
-- Check username/password in DBConnection.java
-- Run database_setup.sql again
+## 7. Common Problems
+1. `java` not found:
+   - Install JDK and add to PATH.
+2. JavaFX module errors:
+   - Set `JAVAFX_LIB` to correct `lib` folder.
+3. MySQL connection failed:
+   - Start MySQL service.
+   - Re-check DB user/password and DB name.
+4. JDBC driver not found:
+   - Ensure `lib/mysql-connector-j-9.6.0.jar` exists.
 
-### Issue 3: "ClassNotFoundException: com.mysql.cj.jdbc.Driver"
-**Solution:**
-- Verify `mysql-connector-j-9.6.0.jar` is in `lib/` folder
-- Check classpath includes the jar file
-
-### Issue 4: Compilation errors
-**Solution:**
-- Ensure JDK 17+ is installed: `java -version`
-- Set JAVA_HOME environment variable
-- Verify all source files are present
-
-## What to Try First
-
-1. **View Products:**
-   - Login as admin
-   - Click "View Products"
-   - You should see 10 sample products
-
-2. **Add a Product:**
-   - Click "Add Product" from Admin Dashboard
-   - Fill in details and click "Add Product"
-
-3. **Process a Sale:**
-   - Click "Billing / Sales"
-   - Select a product
-   - Enter quantity
-   - Click "Process Sale"
-
-4. **Check Alerts:**
-   - Click "Alerts" from Admin Dashboard
-   - View low stock items
-   - View expiring products
-
-5. **Generate Reports:**
-   - Click "Reports"
-   - Explore different tabs
-   - Try adjusting filters
-
-## Next Steps
-
-- Change default passwords for security
-- Add your own products
-- Explore all features
-- Customize as needed
-
-## Need Help?
-
-Check the main README.md for detailed documentation and troubleshooting.
-
----
-
-**Congratulations! 🎉** Your inventory system is ready to use!
+## 8. Offline Usage
+- No internet is required for normal use.
+- App and MySQL run locally on the same PC.
