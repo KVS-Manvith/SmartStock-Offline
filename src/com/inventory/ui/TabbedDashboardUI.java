@@ -6,6 +6,7 @@ import com.inventory.model.Sale;
 import com.inventory.model.User;
 import com.inventory.service.ProductService;
 import com.inventory.service.SaleService;
+import com.inventory.util.ThemeManager;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -29,10 +30,12 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
@@ -52,6 +55,7 @@ public class TabbedDashboardUI {
 
     private final ObservableList<Product> productData = FXCollections.observableArrayList();
     private final ObservableList<Sale> salesData = FXCollections.observableArrayList();
+    private Scene scene;
 
     private TableView<Product> productTable;
     private ComboBox<Product> billingProductCombo;
@@ -92,15 +96,18 @@ public class TabbedDashboardUI {
                 buildHeader(),
                 tabs
         );
+        root.getStyleClass().add("dashboard-root");
         root.setPadding(new Insets(10));
 
-        Scene scene = new Scene(root, 1100, 700);
+        scene = new Scene(root, 1100, 700);
         scene.getStylesheets().add("file:style.css");
+        ThemeManager.applyTheme(scene);
 
         stage.setTitle(FXLoginApp.APP_NAME + " - " + (isAdmin() ? "Admin Dashboard" : "Staff Dashboard"));
         stage.getIcons().add(new Image("file:" + getRoleIconPath()));
         stage.setScene(scene);
         stage.setResizable(true);
+        stage.setMaximized(true);
         stage.show();
 
         refreshProducts();
@@ -119,7 +126,18 @@ public class TabbedDashboardUI {
                         + user.getUsername() + " (" + user.getRole() + ")"
         );
 
-        HBox header = new HBox(12, logoView, roleIconView, title, welcome);
+        ToggleButton darkModeToggle = new ToggleButton("Dark Mode");
+        darkModeToggle.setSelected(ThemeManager.isDarkMode());
+        darkModeToggle.setOnAction(e -> {
+            ThemeManager.setDarkMode(darkModeToggle.isSelected());
+            ThemeManager.applyTheme(scene);
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox header = new HBox(12, logoView, roleIconView, title, welcome, spacer, darkModeToggle);
+        header.getStyleClass().add("dashboard-header");
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(5, 5, 10, 5));
         return header;
@@ -128,6 +146,7 @@ public class TabbedDashboardUI {
     private Tab createProductsTab() {
         Tab tab = new Tab("Products");
         tab.setClosable(false);
+        tab.setDisable(false);
 
         TextField searchField = new TextField();
         searchField.setPromptText("Search by name or category...");
@@ -137,6 +156,7 @@ public class TabbedDashboardUI {
         Button refreshBtn = new Button("Refresh");
 
         HBox topBar = new HBox(10, searchField, searchBtn, refreshBtn);
+        topBar.getStyleClass().add("toolbar-row");
         topBar.setAlignment(Pos.CENTER_LEFT);
         topBar.setPadding(new Insets(10));
 
@@ -150,19 +170,34 @@ public class TabbedDashboardUI {
             } else {
                 productData.setAll(productDAO.searchProducts(keyword));
             }
+            productTable.setDisable(false);
         });
         refreshBtn.setOnAction(e -> {
             searchField.clear();
             refreshProducts();
+            productTable.setDisable(false);
         });
 
         VBox content = new VBox(10, topBar, productTable);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(10));
         VBox.setVgrow(productTable, Priority.ALWAYS);
 
         if (isAdmin()) {
             content.getChildren().add(createProductFormPane());
         }
+
+        // Defensive reset: if Products view ever enters a disabled state, restore it on tab focus.
+        tab.setOnSelectionChanged(e -> {
+            if (tab.isSelected()) {
+                tab.setDisable(false);
+                searchField.setDisable(false);
+                searchBtn.setDisable(false);
+                refreshBtn.setDisable(false);
+                productTable.setDisable(false);
+                refreshProducts();
+            }
+        });
 
         tab.setContent(content);
         return tab;
@@ -279,6 +314,7 @@ public class TabbedDashboardUI {
         clearBtn.setOnAction(e -> clearProductForm(nameField, categoryCombo, qtySpinner, priceField, expiryPicker));
 
         VBox wrapper = new VBox(10, new Separator(), formTitle, grid, actions);
+        wrapper.getStyleClass().add("panel-surface");
         wrapper.setPadding(new Insets(10));
         return wrapper;
     }
@@ -400,6 +436,7 @@ public class TabbedDashboardUI {
                 billingTotalLabel,
                 actions
         );
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(20));
         tab.setContent(content);
         return tab;
@@ -455,6 +492,7 @@ public class TabbedDashboardUI {
         totalSalesLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
 
         VBox content = new VBox(10, refreshBtn, salesTable, totalSalesLabel);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(12));
         VBox.setVgrow(salesTable, Priority.ALWAYS);
 
@@ -498,6 +536,7 @@ public class TabbedDashboardUI {
         refreshBtn.fire();
 
         VBox content = new VBox(10, refreshBtn, table, countLabel);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(12));
         VBox.setVgrow(table, Priority.ALWAYS);
         tab.setContent(content);
@@ -524,6 +563,7 @@ public class TabbedDashboardUI {
 
         HBox controls = new HBox(10, new Label("Threshold"), thresholdSpinner, refreshBtn);
         VBox content = new VBox(10, controls, table, countLabel);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(12));
         VBox.setVgrow(table, Priority.ALWAYS);
         tab.setContent(content);
@@ -550,6 +590,7 @@ public class TabbedDashboardUI {
 
         HBox controls = new HBox(10, new Label("Days"), daysSpinner, refreshBtn);
         VBox content = new VBox(10, controls, table, countLabel);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(12));
         VBox.setVgrow(table, Priority.ALWAYS);
         tab.setContent(content);
@@ -579,6 +620,7 @@ public class TabbedDashboardUI {
 
         HBox controls = new HBox(10, new Label("Category"), categoryCombo, refreshBtn);
         VBox content = new VBox(10, controls, table, countLabel);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(12));
         VBox.setVgrow(table, Priority.ALWAYS);
         tab.setContent(content);
@@ -611,6 +653,7 @@ public class TabbedDashboardUI {
         refreshBtn.fire();
 
         VBox content = new VBox(10, refreshBtn, label, table);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(12));
         VBox.setVgrow(table, Priority.ALWAYS);
         tab.setContent(content);
@@ -632,6 +675,7 @@ public class TabbedDashboardUI {
         refreshBtn.fire();
 
         VBox content = new VBox(10, refreshBtn, label, table);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(12));
         VBox.setVgrow(table, Priority.ALWAYS);
         tab.setContent(content);
@@ -658,6 +702,7 @@ public class TabbedDashboardUI {
         });
 
         VBox content = new VBox(15, username, role, logoutBtn);
+        content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(20));
         content.setAlignment(Pos.TOP_LEFT);
         tab.setContent(content);

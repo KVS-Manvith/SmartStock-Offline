@@ -82,7 +82,8 @@ public class AdminDashboard {
         Stage stage = new Stage();
         stage.setTitle("Admin Dashboard");
         stage.setScene(scene);
-        stage.setResizable(false);
+        stage.setResizable(true);
+        stage.setMaximized(true);
         stage.show();
     }
 

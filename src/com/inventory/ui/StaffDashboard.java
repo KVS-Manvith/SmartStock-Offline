@@ -66,7 +66,8 @@ public class StaffDashboard {
         Stage stage = new Stage();
         stage.setTitle("Staff Dashboard");
         stage.setScene(scene);
-        stage.setResizable(false);
+        stage.setResizable(true);
+        stage.setMaximized(true);
         stage.show();
     }
 }

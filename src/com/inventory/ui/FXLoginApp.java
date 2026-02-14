@@ -2,6 +2,7 @@ package com.inventory.ui;
 
 import com.inventory.model.User;
 import com.inventory.service.UserService;
+import com.inventory.util.ThemeManager;
 
 import javafx.scene.layout.VBox;
 import javafx.geometry.Pos;
@@ -15,6 +16,7 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
@@ -57,6 +59,9 @@ resultLabel.setStyle("-fx-text-fill: red;");
         loginBtn.setDefaultButton(true);
 
 
+        CheckBox darkModeCheck = new CheckBox("Dark Mode");
+        darkModeCheck.setSelected(ThemeManager.isDarkMode());
+
         // Layout
         GridPane grid = new GridPane();
         grid.setPadding(new Insets(20));
@@ -70,6 +75,7 @@ resultLabel.setStyle("-fx-text-fill: red;");
         grid.add(passField, 1, 2);
         grid.add(loginBtn, 1, 3);
         grid.add(resultLabel, 1, 4);
+        grid.add(darkModeCheck, 1, 5);
 
 
         // Login logic
@@ -106,23 +112,26 @@ resultLabel.setText("");
 VBox root = new VBox(20);
 root.getChildren().add(grid);
 root.setAlignment(Pos.CENTER);
-
-
-
-
-root.setStyle("-fx-background-color: #f4f6f8;");
+root.getStyleClass().add("login-root");
 
 Scene scene = new Scene(root, 500, 350);
 scene.getStylesheets().add("file:style.css");
+ThemeManager.applyTheme(scene);
+
+darkModeCheck.setOnAction(e -> {
+    ThemeManager.setDarkMode(darkModeCheck.isSelected());
+    ThemeManager.applyTheme(scene);
+});
 
 
 
 
         stage.setTitle(APP_NAME + " - Login");
         stage.setScene(scene);
+        stage.setMaximized(true);
         stage.show();
         userField.requestFocus();
-        stage.setResizable(false);
+        stage.setResizable(true);
 
     }
 
