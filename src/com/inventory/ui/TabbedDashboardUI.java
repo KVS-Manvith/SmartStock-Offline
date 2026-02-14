@@ -60,8 +60,13 @@ public class TabbedDashboardUI {
     private TableView<Product> productTable;
     private ComboBox<Product> billingProductCombo;
     private Spinner<Integer> billingQtySpinner;
+    private Spinner<Double> billingDiscountSpinner;
+    private TextField billingPaidField;
     private Label billingPriceLabel;
+    private Label billingSubtotalLabel;
+    private Label billingDiscountLabel;
     private Label billingTotalLabel;
+    private Label billingChangeLabel;
     private Button processSaleBtn;
     private Label totalSalesLabel;
 
@@ -405,18 +410,46 @@ public class TabbedDashboardUI {
         billingQtySpinner.setEditable(true);
         billingQtySpinner.setDisable(true);
 
+        billingDiscountSpinner = new Spinner<>(0.0, 100.0, 0.0, 1.0);
+        billingDiscountSpinner.setEditable(true);
+        billingDiscountSpinner.setDisable(true);
+
+        billingPaidField = new TextField();
+        billingPaidField.setPromptText("Amount paid (optional)");
+        billingPaidField.setDisable(true);
+
         billingPriceLabel = new Label("Unit Price: Rs. 0.00");
-        billingTotalLabel = new Label("Total: Rs. 0.00");
+        billingSubtotalLabel = new Label("Subtotal: Rs. 0.00");
+        billingDiscountLabel = new Label("Discount: Rs. 0.00 (0%)");
+        billingTotalLabel = new Label("Payable: Rs. 0.00");
         billingTotalLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        billingChangeLabel = new Label("Change: Rs. 0.00");
 
         processSaleBtn = new Button("Process Sale");
         processSaleBtn.setDisable(true);
+        Button exactPaidBtn = new Button("Set Paid = Payable");
         Button openSalesBtn = new Button("Open Sales History Tab");
 
         billingProductCombo.setOnAction(e -> updateBillingSelectionState());
         billingQtySpinner.valueProperty().addListener((obs, oldVal, newVal) -> updateBillingTotal());
+        billingDiscountSpinner.valueProperty().addListener((obs, oldVal, newVal) -> updateBillingTotal());
+        billingPaidField.textProperty().addListener((obs, oldVal, newVal) -> updateBillingTotal());
 
         processSaleBtn.setOnAction(e -> processSale());
+        exactPaidBtn.setOnAction(e -> {
+            Product selected = billingProductCombo.getValue();
+            if (selected == null) {
+                return;
+            }
+            int qty = billingQtySpinner.getValue();
+            if (qty <= 0) {
+                return;
+            }
+            double subtotal = selected.getPrice() * qty;
+            double discountPercent = readDiscountPercent();
+            double payable = Math.max(0.0, subtotal - (subtotal * discountPercent / 100.0));
+            billingPaidField.setText(String.format("%.2f", payable));
+        });
         openSalesBtn.setOnAction(e -> tabPane.getSelectionModel().select(salesTab));
 
         GridPane grid = new GridPane();
@@ -426,14 +459,21 @@ public class TabbedDashboardUI {
         grid.add(billingProductCombo, 1, 0);
         grid.add(new Label("Quantity"), 0, 1);
         grid.add(billingQtySpinner, 1, 1);
+        grid.add(new Label("Discount (%)"), 0, 2);
+        grid.add(billingDiscountSpinner, 1, 2);
+        grid.add(new Label("Amount Paid"), 0, 3);
+        grid.add(billingPaidField, 1, 3);
 
-        HBox actions = new HBox(10, processSaleBtn, openSalesBtn);
+        HBox actions = new HBox(10, processSaleBtn, exactPaidBtn, openSalesBtn);
 
         VBox content = new VBox(15,
                 new Label("Process Sale"),
                 grid,
                 billingPriceLabel,
+                billingSubtotalLabel,
+                billingDiscountLabel,
                 billingTotalLabel,
+                billingChangeLabel,
                 actions
         );
         content.getStyleClass().add("panel-surface");
@@ -788,8 +828,14 @@ public class TabbedDashboardUI {
         if (selected == null) {
             billingQtySpinner.setDisable(true);
             billingQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 0, 0));
+            billingDiscountSpinner.setDisable(true);
+            billingPaidField.setDisable(true);
             billingPriceLabel.setText("Unit Price: Rs. 0.00");
-            billingTotalLabel.setText("Total: Rs. 0.00");
+            billingSubtotalLabel.setText("Subtotal: Rs. 0.00");
+            billingDiscountLabel.setText("Discount: Rs. 0.00 (0%)");
+            billingTotalLabel.setText("Payable: Rs. 0.00");
+            billingChangeLabel.setText("Change: Rs. 0.00");
+            billingChangeLabel.setStyle("");
             processSaleBtn.setDisable(true);
             return;
         }
@@ -798,12 +844,19 @@ public class TabbedDashboardUI {
         if (selected.getQuantity() <= 0) {
             billingQtySpinner.setDisable(true);
             billingQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 0, 0));
-            billingTotalLabel.setText("Total: Rs. 0.00");
+            billingDiscountSpinner.setDisable(true);
+            billingPaidField.setDisable(true);
+            billingSubtotalLabel.setText("Subtotal: Rs. 0.00");
+            billingDiscountLabel.setText("Discount: Rs. 0.00 (0%)");
+            billingTotalLabel.setText("Payable: Rs. 0.00");
+            billingChangeLabel.setText("Change: Rs. 0.00");
+            billingChangeLabel.setStyle("");
             processSaleBtn.setDisable(true);
         } else {
             billingQtySpinner.setDisable(false);
             billingQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, selected.getQuantity(), 1));
-            processSaleBtn.setDisable(false);
+            billingDiscountSpinner.setDisable(false);
+            billingPaidField.setDisable(false);
             updateBillingTotal();
         }
     }
@@ -811,12 +864,46 @@ public class TabbedDashboardUI {
     private void updateBillingTotal() {
         Product selected = billingProductCombo.getValue();
         if (selected == null) {
-            billingTotalLabel.setText("Total: Rs. 0.00");
+            billingSubtotalLabel.setText("Subtotal: Rs. 0.00");
+            billingDiscountLabel.setText("Discount: Rs. 0.00 (0%)");
+            billingTotalLabel.setText("Payable: Rs. 0.00");
+            billingChangeLabel.setText("Change: Rs. 0.00");
+            billingChangeLabel.setStyle("");
+            processSaleBtn.setDisable(true);
             return;
         }
+
         int qty = billingQtySpinner.getValue();
-        double total = selected.getPrice() * qty;
-        billingTotalLabel.setText("Total: " + formatCurrency(total));
+        double subtotal = selected.getPrice() * qty;
+        double discountPercent = readDiscountPercent();
+        double discountAmount = subtotal * discountPercent / 100.0;
+        double payable = Math.max(0.0, subtotal - discountAmount);
+
+        billingSubtotalLabel.setText("Subtotal: " + formatCurrency(subtotal));
+        billingDiscountLabel.setText(
+                "Discount: " + formatCurrency(discountAmount) + " (" + String.format("%.1f", discountPercent) + "%)"
+        );
+        billingTotalLabel.setText("Payable: " + formatCurrency(payable));
+
+        boolean canProcess = qty > 0 && selected.getQuantity() >= qty;
+        Double paidAmount = parsePaidAmount();
+        if (paidAmount == null) {
+            billingChangeLabel.setText("Change: Rs. 0.00");
+            billingChangeLabel.setStyle("");
+        } else if (Double.isNaN(paidAmount) || paidAmount < 0) {
+            billingChangeLabel.setText("Invalid paid amount");
+            billingChangeLabel.setStyle("-fx-text-fill: #d32f2f; -fx-font-weight: bold;");
+            canProcess = false;
+        } else if (paidAmount < payable) {
+            billingChangeLabel.setText("Balance Due: " + formatCurrency(payable - paidAmount));
+            billingChangeLabel.setStyle("-fx-text-fill: #ef6c00; -fx-font-weight: bold;");
+            canProcess = false;
+        } else {
+            billingChangeLabel.setText("Change: " + formatCurrency(paidAmount - payable));
+            billingChangeLabel.setStyle("-fx-text-fill: #2e7d32; -fx-font-weight: bold;");
+        }
+
+        processSaleBtn.setDisable(!canProcess);
     }
 
     private void processSale() {
@@ -832,13 +919,67 @@ public class TabbedDashboardUI {
             return;
         }
 
-        boolean success = saleService.processSale(selected.getProductId(), qty, user.getUserId());
+        double subtotal = selected.getPrice() * qty;
+        double discountPercent = readDiscountPercent();
+        double discountAmount = subtotal * discountPercent / 100.0;
+        double payable = Math.max(0.0, subtotal - discountAmount);
+
+        Double paidAmount = parsePaidAmount();
+        if (paidAmount != null) {
+            if (Double.isNaN(paidAmount) || paidAmount < 0) {
+                showAlert(Alert.AlertType.ERROR, "Invalid Paid Amount", "Enter a valid amount paid.");
+                return;
+            }
+            if (paidAmount < payable) {
+                showAlert(Alert.AlertType.WARNING, "Insufficient Payment", "Paid amount is less than payable amount.");
+                return;
+            }
+        }
+
+        boolean success = saleService.processSale(selected.getProductId(), qty, user.getUserId(), payable);
         if (success) {
-            showAlert(Alert.AlertType.INFORMATION, "Sale Successful", "Sale processed.");
+            String message = "Sale processed.\n"
+                    + "Subtotal: " + formatCurrency(subtotal) + "\n"
+                    + "Discount: " + formatCurrency(discountAmount) + " (" + String.format("%.1f", discountPercent) + "%)\n"
+                    + "Payable: " + formatCurrency(payable);
+            if (paidAmount != null) {
+                message += "\nPaid: " + formatCurrency(paidAmount)
+                        + "\nChange: " + formatCurrency(paidAmount - payable);
+            }
+
+            showAlert(Alert.AlertType.INFORMATION, "Sale Successful", message);
+            billingDiscountSpinner.getValueFactory().setValue(0.0);
+            billingPaidField.clear();
             refreshProducts();
             refreshSales();
         } else {
             showAlert(Alert.AlertType.ERROR, "Sale Failed", "Could not process sale.");
+        }
+    }
+
+    private double readDiscountPercent() {
+        if (billingDiscountSpinner == null || billingDiscountSpinner.getValue() == null) {
+            return 0.0;
+        }
+        double value = billingDiscountSpinner.getValue();
+        if (value < 0.0) {
+            return 0.0;
+        }
+        return Math.min(value, 100.0);
+    }
+
+    private Double parsePaidAmount() {
+        if (billingPaidField == null) {
+            return null;
+        }
+        String text = billingPaidField.getText();
+        if (text == null || text.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(text.trim());
+        } catch (NumberFormatException ex) {
+            return Double.NaN;
         }
     }
 

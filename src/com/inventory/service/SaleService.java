@@ -17,6 +17,10 @@ public class SaleService {
     private final ProductDAO productDAO = new ProductDAO();
 
     public boolean processSale(int productId, int quantity, int userId) {
+        return processSale(productId, quantity, userId, -1);
+    }
+
+    public boolean processSale(int productId, int quantity, int userId, double billedTotalPrice) {
         if (quantity <= 0) {
             System.out.println("Invalid quantity!");
             return false;
@@ -40,12 +44,19 @@ public class SaleService {
                 return false;
             }
 
-            double totalPrice = product.getPrice() * quantity;
+            double baseTotalPrice = product.getPrice() * quantity;
+            double finalTotalPrice = billedTotalPrice < 0 ? baseTotalPrice : billedTotalPrice;
+
+            if (finalTotalPrice < 0 || finalTotalPrice > baseTotalPrice) {
+                con.rollback();
+                System.out.println("Invalid billed total price: " + finalTotalPrice);
+                return false;
+            }
 
             Sale sale = new Sale();
             sale.setProductId(productId);
             sale.setQuantitySold(quantity);
-            sale.setTotalPrice(totalPrice);
+            sale.setTotalPrice(finalTotalPrice);
             sale.setUserId(userId);
 
             boolean saleAdded = saleDAO.addSale(con, sale);
