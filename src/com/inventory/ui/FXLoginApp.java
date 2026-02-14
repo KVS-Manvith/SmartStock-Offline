@@ -6,6 +6,7 @@ import com.inventory.util.ThemeManager;
 
 import javafx.scene.layout.VBox;
 import javafx.geometry.Pos;
+import javafx.geometry.HPos;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 
@@ -21,6 +22,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 
 public class FXLoginApp extends Application {
@@ -67,8 +70,11 @@ resultLabel.setStyle("-fx-text-fill: red;");
         grid.setPadding(new Insets(20));
         grid.setHgap(10);
         grid.setVgap(10);
+        grid.setAlignment(Pos.CENTER);
+        grid.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
 
-        grid.add(title, 1, 0);
+        grid.add(title, 0, 0, 2, 1);
+        GridPane.setHalignment(title, HPos.CENTER);
         grid.add(userLabel, 0, 1);
         grid.add(userField, 1, 1);
         grid.add(passLabel, 0, 2);
@@ -108,10 +114,15 @@ resultLabel.setText("");
 
         });
 
-      
-VBox root = new VBox(20);
-root.getChildren().add(grid);
+VBox loginCard = new VBox(grid);
+loginCard.setAlignment(Pos.CENTER);
+loginCard.setMaxWidth(520);
+loginCard.setMaxHeight(Region.USE_PREF_SIZE);
+loginCard.getStyleClass().add("panel-surface");
+
+StackPane root = new StackPane(loginCard);
 root.setAlignment(Pos.CENTER);
+root.setPadding(new Insets(20));
 root.getStyleClass().add("login-root");
 
 Scene scene = new Scene(root, 500, 350);
