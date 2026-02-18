@@ -7,6 +7,8 @@ import com.inventory.model.User;
 import com.inventory.service.ProductService;
 import com.inventory.service.SaleService;
 import com.inventory.util.ThemeManager;
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -21,6 +23,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -42,6 +45,8 @@ import javafx.stage.Stage;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class TabbedDashboardUI {
@@ -55,9 +60,11 @@ public class TabbedDashboardUI {
 
     private final ObservableList<Product> productData = FXCollections.observableArrayList();
     private final ObservableList<Sale> salesData = FXCollections.observableArrayList();
+    private final ObservableList<BillingCartItem> billingCartData = FXCollections.observableArrayList();
     private Scene scene;
 
     private TableView<Product> productTable;
+    private TableView<BillingCartItem> billingCartTable;
     private ComboBox<Product> billingProductCombo;
     private Spinner<Integer> billingQtySpinner;
     private Spinner<Double> billingDiscountSpinner;
@@ -67,6 +74,7 @@ public class TabbedDashboardUI {
     private Label billingDiscountLabel;
     private Label billingTotalLabel;
     private Label billingChangeLabel;
+    private Label billingCartCountLabel;
     private Button processSaleBtn;
     private Label totalSalesLabel;
 
@@ -419,33 +427,32 @@ public class TabbedDashboardUI {
         billingPaidField.setDisable(true);
 
         billingPriceLabel = new Label("Unit Price: Rs. 0.00");
+        billingCartCountLabel = new Label("Items in Cart: 0");
         billingSubtotalLabel = new Label("Subtotal: Rs. 0.00");
         billingDiscountLabel = new Label("Discount: Rs. 0.00 (0%)");
         billingTotalLabel = new Label("Payable: Rs. 0.00");
         billingTotalLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
         billingChangeLabel = new Label("Change: Rs. 0.00");
 
+        Button addToCartBtn = new Button("Add to Cart");
         processSaleBtn = new Button("Process Sale");
         processSaleBtn.setDisable(true);
+        Button removeSelectedBtn = new Button("Remove Selected");
+        Button clearCartBtn = new Button("Clear Cart");
         Button exactPaidBtn = new Button("Set Paid = Payable");
         Button openSalesBtn = new Button("Open Sales History Tab");
 
         billingProductCombo.setOnAction(e -> updateBillingSelectionState());
-        billingQtySpinner.valueProperty().addListener((obs, oldVal, newVal) -> updateBillingTotal());
+        billingQtySpinner.valueProperty().addListener((obs, oldVal, newVal) -> updateBillingSelectionState());
         billingDiscountSpinner.valueProperty().addListener((obs, oldVal, newVal) -> updateBillingTotal());
         billingPaidField.textProperty().addListener((obs, oldVal, newVal) -> updateBillingTotal());
 
+        addToCartBtn.setOnAction(e -> addSelectedProductToCart());
         processSaleBtn.setOnAction(e -> processSale());
+        removeSelectedBtn.setOnAction(e -> removeSelectedCartItem());
+        clearCartBtn.setOnAction(e -> clearBillingCart());
         exactPaidBtn.setOnAction(e -> {
-            Product selected = billingProductCombo.getValue();
-            if (selected == null) {
-                return;
-            }
-            int qty = billingQtySpinner.getValue();
-            if (qty <= 0) {
-                return;
-            }
-            double subtotal = selected.getPrice() * qty;
+            double subtotal = getCartSubtotal();
             double discountPercent = readDiscountPercent();
             double payable = Math.max(0.0, subtotal - (subtotal * discountPercent / 100.0));
             billingPaidField.setText(String.format("%.2f", payable));
@@ -464,12 +471,19 @@ public class TabbedDashboardUI {
         grid.add(new Label("Amount Paid"), 0, 3);
         grid.add(billingPaidField, 1, 3);
 
+        billingCartTable = createBillingCartTable();
+        billingCartTable.setItems(billingCartData);
+
+        HBox cartActions = new HBox(10, addToCartBtn, removeSelectedBtn, clearCartBtn);
         HBox actions = new HBox(10, processSaleBtn, exactPaidBtn, openSalesBtn);
 
         VBox content = new VBox(15,
                 new Label("Process Sale"),
                 grid,
                 billingPriceLabel,
+                billingCartCountLabel,
+                cartActions,
+                billingCartTable,
                 billingSubtotalLabel,
                 billingDiscountLabel,
                 billingTotalLabel,
@@ -478,7 +492,22 @@ public class TabbedDashboardUI {
         );
         content.getStyleClass().add("panel-surface");
         content.setPadding(new Insets(20));
-        tab.setContent(content);
+        content.setFillWidth(true);
+
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPannable(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+
+        tab.setOnSelectionChanged(e -> {
+            if (tab.isSelected()) {
+                refreshProducts();
+                updateBillingSelectionState();
+                updateBillingTotal();
+            }
+        });
+        tab.setContent(scrollPane);
         return tab;
     }
 
@@ -800,6 +829,7 @@ public class TabbedDashboardUI {
 
     private void refreshProducts() {
         productData.setAll(productDAO.getAllProducts());
+        syncBillingCartWithLatestProducts();
 
         if (billingProductCombo != null) {
             Product selected = billingProductCombo.getValue();
@@ -813,6 +843,7 @@ public class TabbedDashboardUI {
                 billingProductCombo.setValue(replacement);
             }
             updateBillingSelectionState();
+            updateBillingTotal();
         }
     }
 
@@ -828,53 +859,47 @@ public class TabbedDashboardUI {
         if (selected == null) {
             billingQtySpinner.setDisable(true);
             billingQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 0, 0));
-            billingDiscountSpinner.setDisable(true);
-            billingPaidField.setDisable(true);
             billingPriceLabel.setText("Unit Price: Rs. 0.00");
-            billingSubtotalLabel.setText("Subtotal: Rs. 0.00");
-            billingDiscountLabel.setText("Discount: Rs. 0.00 (0%)");
-            billingTotalLabel.setText("Payable: Rs. 0.00");
-            billingChangeLabel.setText("Change: Rs. 0.00");
-            billingChangeLabel.setStyle("");
-            processSaleBtn.setDisable(true);
+            billingDiscountSpinner.setDisable(billingCartData.isEmpty());
+            billingPaidField.setDisable(billingCartData.isEmpty());
             return;
         }
 
-        billingPriceLabel.setText("Unit Price: " + formatCurrency(selected.getPrice()));
-        if (selected.getQuantity() <= 0) {
+        int available = selected.getQuantity() - getCartQtyForProduct(selected.getProductId());
+        billingPriceLabel.setText("Unit Price: " + formatCurrency(selected.getPrice()) + " (Available: " + Math.max(available, 0) + ")");
+
+        if (available <= 0) {
             billingQtySpinner.setDisable(true);
             billingQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 0, 0));
-            billingDiscountSpinner.setDisable(true);
-            billingPaidField.setDisable(true);
-            billingSubtotalLabel.setText("Subtotal: Rs. 0.00");
-            billingDiscountLabel.setText("Discount: Rs. 0.00 (0%)");
-            billingTotalLabel.setText("Payable: Rs. 0.00");
-            billingChangeLabel.setText("Change: Rs. 0.00");
-            billingChangeLabel.setStyle("");
-            processSaleBtn.setDisable(true);
         } else {
             billingQtySpinner.setDisable(false);
-            billingQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, selected.getQuantity(), 1));
-            billingDiscountSpinner.setDisable(false);
-            billingPaidField.setDisable(false);
-            updateBillingTotal();
+            int currentQty = billingQtySpinner.getValue() == null ? 1 : Math.max(1, billingQtySpinner.getValue());
+            int initialQty = Math.min(currentQty, available);
+            billingQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, available, initialQty));
         }
     }
 
     private void updateBillingTotal() {
-        Product selected = billingProductCombo.getValue();
-        if (selected == null) {
+        double subtotal = getCartSubtotal();
+        if (billingCartCountLabel != null) {
+            billingCartCountLabel.setText("Items in Cart: " + billingCartData.size());
+        }
+
+        if (subtotal <= 0) {
             billingSubtotalLabel.setText("Subtotal: Rs. 0.00");
             billingDiscountLabel.setText("Discount: Rs. 0.00 (0%)");
             billingTotalLabel.setText("Payable: Rs. 0.00");
             billingChangeLabel.setText("Change: Rs. 0.00");
             billingChangeLabel.setStyle("");
+            billingDiscountSpinner.setDisable(true);
+            billingPaidField.setDisable(true);
             processSaleBtn.setDisable(true);
             return;
         }
 
-        int qty = billingQtySpinner.getValue();
-        double subtotal = selected.getPrice() * qty;
+        billingDiscountSpinner.setDisable(false);
+        billingPaidField.setDisable(false);
+
         double discountPercent = readDiscountPercent();
         double discountAmount = subtotal * discountPercent / 100.0;
         double payable = Math.max(0.0, subtotal - discountAmount);
@@ -885,7 +910,7 @@ public class TabbedDashboardUI {
         );
         billingTotalLabel.setText("Payable: " + formatCurrency(payable));
 
-        boolean canProcess = qty > 0 && selected.getQuantity() >= qty;
+        boolean canProcess = true;
         Double paidAmount = parsePaidAmount();
         if (paidAmount == null) {
             billingChangeLabel.setText("Change: Rs. 0.00");
@@ -907,19 +932,39 @@ public class TabbedDashboardUI {
     }
 
     private void processSale() {
-        Product selected = billingProductCombo.getValue();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No Product", "Select a product.");
+        if (billingCartData.isEmpty()) {
+            showAlert(Alert.AlertType.WARNING, "Cart Empty", "Add at least one product to cart.");
             return;
         }
 
-        int qty = billingQtySpinner.getValue();
-        if (qty <= 0) {
-            showAlert(Alert.AlertType.WARNING, "Invalid Quantity", "Quantity must be greater than zero.");
+        refreshProducts();
+        for (BillingCartItem item : billingCartData) {
+            Product product = productData.stream()
+                    .filter(p -> p.getProductId() == item.getProductId())
+                    .findFirst()
+                    .orElse(null);
+            if (product == null) {
+                showAlert(Alert.AlertType.ERROR, "Product Missing", "Product not found: " + item.getProductName());
+                return;
+            }
+            if (item.getQuantity() > product.getQuantity()) {
+                showAlert(
+                        Alert.AlertType.WARNING,
+                        "Insufficient Stock",
+                        "Not enough stock for " + item.getProductName()
+                                + ". Requested: " + item.getQuantity()
+                                + ", Available: " + product.getQuantity()
+                );
+                return;
+            }
+        }
+
+        double subtotal = getCartSubtotal();
+        if (subtotal <= 0) {
+            showAlert(Alert.AlertType.WARNING, "Cart Empty", "Add valid products to cart.");
             return;
         }
 
-        double subtotal = selected.getPrice() * qty;
         double discountPercent = readDiscountPercent();
         double discountAmount = subtotal * discountPercent / 100.0;
         double payable = Math.max(0.0, subtotal - discountAmount);
@@ -936,7 +981,8 @@ public class TabbedDashboardUI {
             }
         }
 
-        boolean success = saleService.processSale(selected.getProductId(), qty, user.getUserId(), payable);
+        List<Sale> billLines = buildBillLinesWithDiscount(subtotal, payable);
+        boolean success = saleService.processSaleBatch(billLines, user.getUserId());
         if (success) {
             String message = "Sale processed.\n"
                     + "Subtotal: " + formatCurrency(subtotal) + "\n"
@@ -948,6 +994,7 @@ public class TabbedDashboardUI {
             }
 
             showAlert(Alert.AlertType.INFORMATION, "Sale Successful", message);
+            clearBillingCart();
             billingDiscountSpinner.getValueFactory().setValue(0.0);
             billingPaidField.clear();
             refreshProducts();
@@ -955,6 +1002,206 @@ public class TabbedDashboardUI {
         } else {
             showAlert(Alert.AlertType.ERROR, "Sale Failed", "Could not process sale.");
         }
+    }
+
+    private TableView<BillingCartItem> createBillingCartTable() {
+        TableView<BillingCartItem> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setMinHeight(200);
+        table.setPrefHeight(260);
+
+        TableColumn<BillingCartItem, String> nameCol = new TableColumn<>("Product");
+        nameCol.setCellValueFactory(cell -> new ReadOnlyStringWrapper(cell.getValue().getProductName()));
+
+        TableColumn<BillingCartItem, Integer> qtyCol = new TableColumn<>("Qty");
+        qtyCol.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().getQuantity()));
+
+        TableColumn<BillingCartItem, Double> unitPriceCol = new TableColumn<>("Unit Price");
+        unitPriceCol.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().getUnitPrice()));
+        unitPriceCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : formatCurrency(item));
+            }
+        });
+
+        TableColumn<BillingCartItem, Double> totalCol = new TableColumn<>("Line Total");
+        totalCol.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().getLineTotal()));
+        totalCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : formatCurrency(item));
+            }
+        });
+
+        table.getColumns().add(nameCol);
+        table.getColumns().add(qtyCol);
+        table.getColumns().add(unitPriceCol);
+        table.getColumns().add(totalCol);
+        return table;
+    }
+
+    private void addSelectedProductToCart() {
+        Product selected = billingProductCombo.getValue();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No Product", "Select a product to add.");
+            return;
+        }
+
+        int qty = billingQtySpinner.getValue();
+        if (qty <= 0) {
+            showAlert(Alert.AlertType.WARNING, "Invalid Quantity", "Quantity must be greater than zero.");
+            return;
+        }
+
+        int available = selected.getQuantity() - getCartQtyForProduct(selected.getProductId());
+        if (qty > available) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "Insufficient Stock",
+                    "Only " + Math.max(available, 0) + " units are available for " + selected.getName() + "."
+            );
+            return;
+        }
+
+        BillingCartItem existing = billingCartData.stream()
+                .filter(item -> item.getProductId() == selected.getProductId())
+                .findFirst()
+                .orElse(null);
+
+        if (existing == null) {
+            billingCartData.add(new BillingCartItem(
+                    selected.getProductId(),
+                    selected.getName(),
+                    qty,
+                    selected.getPrice()
+            ));
+        } else {
+            existing.setQuantity(existing.getQuantity() + qty);
+        }
+
+        if (billingCartTable != null) {
+            billingCartTable.refresh();
+        }
+        updateBillingSelectionState();
+        updateBillingTotal();
+    }
+
+    private void removeSelectedCartItem() {
+        if (billingCartData.isEmpty()) {
+            return;
+        }
+
+        if (billingCartTable != null) {
+            BillingCartItem selectedItem = billingCartTable.getSelectionModel().getSelectedItem();
+            if (selectedItem != null) {
+                billingCartData.remove(selectedItem);
+                if (billingCartTable != null) {
+                    billingCartTable.refresh();
+                }
+                updateBillingSelectionState();
+                updateBillingTotal();
+                return;
+            }
+        }
+
+        // Fallback: remove latest line.
+        billingCartData.remove(billingCartData.size() - 1);
+        if (billingCartTable != null) {
+            billingCartTable.refresh();
+        }
+        updateBillingSelectionState();
+        updateBillingTotal();
+    }
+
+    private void clearBillingCart() {
+        billingCartData.clear();
+        if (billingCartTable != null) {
+            billingCartTable.refresh();
+        }
+        updateBillingSelectionState();
+        updateBillingTotal();
+    }
+
+    private int getCartQtyForProduct(int productId) {
+        return billingCartData.stream()
+                .filter(item -> item.getProductId() == productId)
+                .mapToInt(BillingCartItem::getQuantity)
+                .sum();
+    }
+
+    private double getCartSubtotal() {
+        return billingCartData.stream()
+                .mapToDouble(BillingCartItem::getLineTotal)
+                .sum();
+    }
+
+    private void syncBillingCartWithLatestProducts() {
+        if (billingCartData.isEmpty()) {
+            return;
+        }
+
+        List<BillingCartItem> validItems = new ArrayList<>();
+        for (BillingCartItem item : billingCartData) {
+            Product product = productData.stream()
+                    .filter(p -> p.getProductId() == item.getProductId())
+                    .findFirst()
+                    .orElse(null);
+            if (product == null || product.getQuantity() <= 0) {
+                continue;
+            }
+
+            int clampedQty = Math.min(item.getQuantity(), product.getQuantity());
+            if (clampedQty <= 0) {
+                continue;
+            }
+
+            item.setProductName(product.getName());
+            item.setUnitPrice(product.getPrice());
+            item.setQuantity(clampedQty);
+            validItems.add(item);
+        }
+
+        billingCartData.setAll(validItems);
+        if (billingCartTable != null) {
+            billingCartTable.refresh();
+        }
+    }
+
+    private List<Sale> buildBillLinesWithDiscount(double subtotal, double payable) {
+        List<Sale> lines = new ArrayList<>();
+        if (billingCartData.isEmpty() || subtotal <= 0) {
+            return lines;
+        }
+
+        double runningTotal = 0.0;
+        for (int i = 0; i < billingCartData.size(); i++) {
+            BillingCartItem item = billingCartData.get(i);
+            double linePayable;
+            if (i == billingCartData.size() - 1) {
+                linePayable = roundCurrency(payable - runningTotal);
+            } else {
+                linePayable = roundCurrency(item.getLineTotal() * payable / subtotal);
+                runningTotal += linePayable;
+            }
+            if (linePayable < 0) {
+                linePayable = 0;
+            }
+
+            Sale sale = new Sale();
+            sale.setProductId(item.getProductId());
+            sale.setQuantitySold(item.getQuantity());
+            sale.setTotalPrice(linePayable);
+            lines.add(sale);
+        }
+
+        return lines;
+    }
+
+    private double roundCurrency(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private double readDiscountPercent() {
@@ -980,6 +1227,52 @@ public class TabbedDashboardUI {
             return Double.parseDouble(text.trim());
         } catch (NumberFormatException ex) {
             return Double.NaN;
+        }
+    }
+
+    private static class BillingCartItem {
+        private final int productId;
+        private String productName;
+        private int quantity;
+        private double unitPrice;
+
+        private BillingCartItem(int productId, String productName, int quantity, double unitPrice) {
+            this.productId = productId;
+            this.productName = productName;
+            this.quantity = quantity;
+            this.unitPrice = unitPrice;
+        }
+
+        public int getProductId() {
+            return productId;
+        }
+
+        public String getProductName() {
+            return productName;
+        }
+
+        public void setProductName(String productName) {
+            this.productName = productName;
+        }
+
+        public int getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(int quantity) {
+            this.quantity = quantity;
+        }
+
+        public double getUnitPrice() {
+            return unitPrice;
+        }
+
+        public void setUnitPrice(double unitPrice) {
+            this.unitPrice = unitPrice;
+        }
+
+        public double getLineTotal() {
+            return unitPrice * quantity;
         }
     }
 

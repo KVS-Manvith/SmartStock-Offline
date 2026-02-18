@@ -54,17 +54,14 @@ if not exist "src" (
 
 if not exist "out" mkdir out
 
-set "SRC_LIST=%TEMP%\smartstock_sources_%RANDOM%%RANDOM%.txt"
-if exist "%SRC_LIST%" del /f /q "%SRC_LIST%"
-
-for /r "src" %%F in (*.java) do (
-    >> "%SRC_LIST%" echo %%F
-)
-
 echo [INFO] Compiling SmartStock Offline...
-javac --module-path "%JAVAFX_LIB%" --add-modules javafx.controls,javafx.fxml -cp "lib\mysql-connector-j-9.6.0.jar" -d out @"%SRC_LIST%"
+javac --module-path "%JAVAFX_LIB%" --add-modules javafx.controls,javafx.fxml -cp "lib\mysql-connector-j-9.6.0.jar" -d out ^
+    src\com\inventory\dao\*.java ^
+    src\com\inventory\model\*.java ^
+    src\com\inventory\service\*.java ^
+    src\com\inventory\ui\*.java ^
+    src\com\inventory\util\*.java
 set "COMPILE_CODE=%ERRORLEVEL%"
-del /f /q "%SRC_LIST%" >nul 2>&1
 
 if not "%COMPILE_CODE%"=="0" (
     echo [ERROR] Compilation failed.

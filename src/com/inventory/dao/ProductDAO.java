@@ -97,10 +97,11 @@ public class ProductDAO {
         List<Product> list = new ArrayList<>();
 
         String sql = """
-            SELECT product_id, name, expiry_date
+            SELECT product_id, name, category, quantity, price, expiry_date
             FROM products
             WHERE expiry_date IS NOT NULL
             AND expiry_date <= CURDATE() + INTERVAL ? DAY
+            ORDER BY expiry_date ASC
         """;
 
         try (Connection con = DBConnection.getConnection();
@@ -114,6 +115,9 @@ public class ProductDAO {
                 Product p = new Product();
                 p.setProductId(rs.getInt("product_id"));
                 p.setName(rs.getString("name"));
+                p.setCategory(rs.getString("category"));
+                p.setQuantity(rs.getInt("quantity"));
+                p.setPrice(rs.getDouble("price"));
                 p.setExpiryDate(rs.getDate("expiry_date").toLocalDate());
 
                 list.add(p);
